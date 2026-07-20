@@ -1,0 +1,19 @@
+# Environment files
+**/.env*
+!**/.env.example
+
+# Dependencies
+**/node_modules/
+**/__pycache__/
+**/venv/
+
+# Build artifacts
+**/dist/
+**/build/
+.pytest_cache/
+
+# IDE and OS files
+.vscode/
+.idea/
+.DS_Store
+*.log

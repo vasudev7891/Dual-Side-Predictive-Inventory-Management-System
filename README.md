@@ -4,33 +4,152 @@ IMS Predictive is a dual-sided web application designed to optimize B2B supply c
 
 ---
 
-## 🏗️ System Architecture
+## 📐 Diagrams & System Design
+
+### 1. Block Diagram
+
+```mermaid
+graph LR
+    subgraph Users [User Layer]
+        Retailer[Retail Shop Owner]
+        Supplier[Wholesale Supplier]
+    end
+
+    subgraph UIBlock [Presentation Block - React 19]
+        Marketplace[Retail Marketplace UI]
+        Dashboard[Supplier Inventory Portal]
+        StateStore[Zustand Stores & Recharts]
+    end
+
+    subgraph GatewayBlock [API Gateway Block - Node.js Express]
+        Router[REST Router]
+        Security[JWT Auth & Zod Validator]
+    end
+
+    subgraph MLBlock [AI/ML Engine - Python FastAPI]
+        Prophet[Meta Prophet B2C Forecasting]
+        RandomForest[Random Forest B2B Procurement]
+    end
+
+    subgraph DataBlock [Database & Sync Block - Supabase]
+        PostgreSQL[(PostgreSQL DB + RLS)]
+        RPC[PL/pgSQL place_order Row Lock]
+        RealtimeWS[Supabase Realtime WebSockets]
+    end
+
+    Retailer --> Marketplace
+    Supplier --> Dashboard
+    Marketplace --> StateStore
+    Dashboard --> StateStore
+    
+    StateStore -->|REST Requests| Router
+    Router --> Security
+    Security -->|Proxied ML Requests| MLBlock
+    Security -->|Transactions| RPC
+    RPC --> PostgreSQL
+    PostgreSQL <-->|Instant Stock Sync| RealtimeWS
+    RealtimeWS -->|WebSocket Push| StateStore
+```
+
+---
+
+### 2. System Architecture
 
 ```mermaid
 graph TD
-    subgraph Frontend [React Application]
-        UI[Glassmorphic Dashboard] --> Client[Centralized API Client]
-        Client --> Zustand[Zustand Store Manager]
+    subgraph PresentationLayer [Frontend Presentation Layer - React 19 + Vite]
+        UI[Glassmorphic UI / Dashboard]
+        Client[Centralized Axios API Client]
+        Zustand[Zustand State Stores: Auth / Cart / Inventory]
+        UI --> Client
+        Client --> Zustand
     end
 
-    subgraph BackendGateway [Node.js Gateway API]
-        Express[Express Server] --> Auth[JWT Authentication Middleware]
-        Express --> Cache[Zustand Local Cache]
+    subgraph GatewayLayer [Core Gateway API - Node.js + Express]
+        Express[Express Gateway Server]
+        AuthMW[JWT Auth & Role Middleware]
+        ZodVal[Zod Payload Validator]
+        Express --> AuthMW
+        AuthMW --> ZodVal
     end
 
-    subgraph AnalyticsEngine [Python ML Service]
-        FastAPI[FastAPI Server] --> Prophet[Prophet B2C Forecasting]
-        FastAPI --> RandomForest[Random Forest B2B Procurement]
+    subgraph MLLayer [AI / ML Microservice - Python + FastAPI]
+        FastAPI[FastAPI Server]
+        ProphetEngine[Meta Prophet Engine: B2C Time-Series]
+        RFEngine[Random Forest Regressor: B2B Procurement]
+        FastAPI --> ProphetEngine
+        FastAPI --> RFEngine
     end
 
-    subgraph DataStore [Database Engine]
-        DB[(Supabase PostgreSQL)]
+    subgraph DataLayer [Database & Real-time Layer - Supabase PostgreSQL]
+        DB[(PostgreSQL Database)]
+        RLS[Row Level Security Policies]
+        RPC[Stored Procedure: place_order]
+        Realtime[Supabase Realtime WebSockets]
+        DB --- RLS
+        DB --- RPC
+        DB --- Realtime
     end
 
-    Client -->|REST APIs| Express
-    Express -->|Proxied ML requests| FastAPI
-    Zustand -->|Real-time WebSockets| DB
-    Express -->|PostgreSQL Transactions| DB
+    Client -->|HTTP / REST Requests| Express
+    Express -->|Authenticated Proxy ML Calls| FastAPI
+    Zustand <-->|WebSocket Real-time Sync| Realtime
+    Express -->|Knex / Supabase Admin Client| DB
+```
+
+---
+
+### 3. System Processing Flowchart
+
+```mermaid
+flowchart TD
+    Start([User Accesses IMS Predictive]) --> AuthCheck{Authenticated?}
+    AuthCheck -- No --> Login[Enter Email & Password / Role Selection]
+    Login --> Authenticate[Supabase Auth Issues JWT Token]
+    Authenticate --> RoleSplit{User Role?}
+    AuthCheck -- Yes --> RoleSplit
+
+    RoleSplit -- Retailer --> RetailerHome[Retailer Marketplace Dashboard]
+    RoleSplit -- Supplier --> SupplierHome[Supplier Inventory Management Portal]
+
+    %% Retailer Flow
+    RetailerHome --> ActionRetailer{Select Action}
+    ActionRetailer -- Browse Catalog --> ViewProducts[View Live Products & Real-time Badges]
+    ActionRetailer -- View Smart Restock --> TriggerForecast[Request B2C Demand Forecast]
+    ActionRetailer -- Checkout Cart --> SubmitOrder[POST /api/orders]
+
+    TriggerForecast --> CallNodeFC[Express Proxy to FastAPI /ml/forecast]
+    CallNodeFC --> RunProphet[Execute Meta Prophet Model / Fallback]
+    RunProphet --> DisplayForecast[Display Projected Out Date & Auto-Fill Cart]
+
+    SubmitOrder --> ExecRPC[Execute PostgreSQL Stored Procedure: place_order]
+    ExecRPC --> RowLock[Lock Product Rows: SELECT ... FOR UPDATE]
+    VerifyStock{Stock Available?}
+    RowLock --> VerifyStock
+    VerifyStock -- No --> AbortOrder[Rollback Transaction & Return 400 Error]
+    VerifyStock -- Yes --> DeductStock[Deduct stock_qty & Create Order Row]
+    DeductStock --> CommitTx[Commit Transaction]
+
+    %% Real-time Sync
+    CommitTx --> Broadcast[Supabase Realtime Emits db_change Event]
+    Broadcast --> WSUpdate[WebSockets Push Updated Stock to All Clients]
+
+    %% Supplier Flow
+    SupplierHome --> ActionSupplier{Select Action}
+    ActionSupplier -- Bulk CSV Upload --> UploadCSV[POST /api/inventory/bulk]
+    ActionSupplier -- Procurement Analytics --> TriggerProcurement[Request B2B Procurement Forecast]
+
+    UploadCSV --> ParseCSV[Validate Headers & Upsert Products]
+    ParseCSV --> Broadcast
+
+    TriggerProcurement --> CallNodeProc[Express Proxy to FastAPI /ml/procurement]
+    CallNodeProc --> RunRF[Execute Random Forest Regressor]
+    RunRF --> DisplayProcurement[Display 14-Day Production Priorities & Recommendations]
+
+    WSUpdate --> End([UI Dynamically Updated Without Page Refresh])
+    DisplayForecast --> End
+    DisplayProcurement --> End
+    AbortOrder --> End
 ```
 
 ---

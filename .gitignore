@@ -17,3 +17,9 @@
 .idea/
 .DS_Store
 *.log
+
+# Research and Synopsis folders
+Project Synopsis/
+Survey and Research/
+Survey and Research - IMS/
+

@@ -131,7 +131,9 @@ export const getRetailerForecast = async (req: AuthenticatedRequest, res: Respon
           futureDate.setDate(futureDate.getDate() + dayOffset);
           points.push({
             date: futureDate.toISOString().split('T')[0],
-            predicted_demand: Math.max(0.0, avgDailySales)
+            predicted_demand: Math.max(0.0, avgDailySales),
+            lower_bound: Math.max(0.0, avgDailySales * 0.7),
+            upper_bound: Math.max(0.0, avgDailySales * 1.3)
           });
         }
 

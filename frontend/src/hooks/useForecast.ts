@@ -5,6 +5,8 @@ import { apiClient } from '../utils/apiClient';
 export interface ForecastPoint {
   date: string;
   predicted_demand: number;
+  lower_bound: number;
+  upper_bound: number;
 }
 
 export interface Forecast {

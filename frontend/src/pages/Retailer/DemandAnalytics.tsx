@@ -10,8 +10,9 @@ import {
 import { useForecast } from '../../hooks/useForecast';
 import { 
   ResponsiveContainer, 
-  LineChart, 
+  ComposedChart, 
   Line, 
+  Area,
   XAxis, 
   YAxis, 
   Tooltip, 
@@ -158,7 +159,7 @@ export const DemandAnalytics: React.FC = () => {
                   {/* Recharts chart representation */}
                   <div className="h-40 w-full bg-zinc-950/40 border border-zinc-900/60 rounded-xl p-3">
                     <ResponsiveContainer width="100%" height="100%">
-                      <LineChart data={f.forecast_points} margin={{ top: 5, right: 10, left: -25, bottom: 5 }}>
+                      <ComposedChart data={f.forecast_points} margin={{ top: 5, right: 10, left: -25, bottom: 5 }}>
                         <CartesianGrid strokeDasharray="3 3" stroke="#1f1f23" vertical={false} />
                         <XAxis 
                           dataKey="date" 
@@ -177,6 +178,22 @@ export const DemandAnalytics: React.FC = () => {
                           contentStyle={{ backgroundColor: '#18181b', borderColor: '#27272a', borderRadius: '8px', fontSize: '9px' }}
                           labelClassName="text-zinc-400 font-bold"
                         />
+                        <Area
+                          type="monotone"
+                          dataKey="upper_bound"
+                          stroke="none"
+                          fill={isUrgent ? '#f59e0b' : '#6366f1'}
+                          fillOpacity={0.08}
+                          name="Upper Bound (90%)"
+                        />
+                        <Area
+                          type="monotone"
+                          dataKey="lower_bound"
+                          stroke="none"
+                          fill="#09090b"
+                          fillOpacity={0.9}
+                          name="Lower Bound (90%)"
+                        />
                         <Line 
                           type="monotone" 
                           dataKey="predicted_demand" 
@@ -185,7 +202,7 @@ export const DemandAnalytics: React.FC = () => {
                           dot={{ r: 1.5 }}
                           name="Predicted Sales" 
                         />
-                      </LineChart>
+                      </ComposedChart>
                     </ResponsiveContainer>
                   </div>
 

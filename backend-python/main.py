@@ -17,6 +17,7 @@ from sklearn.ensemble import RandomForestRegressor
 # Configure logger
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("ims-ai-backend")
+logging.getLogger("prophet.plot").setLevel(logging.CRITICAL)
 
 app = FastAPI(
     title="IMS AI microservice",
@@ -62,6 +63,8 @@ class ForecastRequest(BaseModel):
 class ForecastPoint(BaseModel):
     date: str
     predicted_demand: float
+    lower_bound: float
+    upper_bound: float
 
 class ForecastResponse(BaseModel):
     model_config = {
@@ -186,15 +189,22 @@ async def get_forecast(payload: ForecastRequest):
                 for _, row in future_forecast.iterrows():
                     points.append(ForecastPoint(
                         date=row['ds'].strftime('%Y-%m-%d'),
-                        predicted_demand=max(0.0, float(row['yhat']))
+                        predicted_demand=max(0.0, float(row['yhat'])),
+                        lower_bound=max(0.0, float(row['yhat_lower'])),
+                        upper_bound=max(0.0, float(row['yhat_upper']))
                     ))
+
+                # Dynamic confidence score from Prophet's posterior interval width
+                avg_interval = (future_forecast['yhat_upper'] - future_forecast['yhat_lower']).mean()
+                avg_prediction = max(1.0, future_forecast['yhat'].mean())
+                dynamic_confidence = round(max(0.50, min(0.99, 1.0 - (avg_interval / (2 * avg_prediction)))), 2)
 
                 return ForecastResponse(
                     sku=sku,
                     current_stock=current_stock,
                     projected_out_date=out_date,
                     suggested_restock_qty=max(10, suggested_restock),
-                    confidence_score=0.92,
+                    confidence_score=dynamic_confidence,
                     trend=trend,
                     model_used="Meta Prophet",
                     forecast_points=points
@@ -234,7 +244,9 @@ async def get_forecast(payload: ForecastRequest):
                 future_date = datetime.utcnow() + timedelta(days=day_offset)
                 points.append(ForecastPoint(
                     date=future_date.strftime('%Y-%m-%d'),
-                    predicted_demand=max(0.0, float(avg_daily_demand))
+                    predicted_demand=max(0.0, float(avg_daily_demand)),
+                    lower_bound=max(0.0, float(avg_daily_demand * 0.7)),
+                    upper_bound=max(0.0, float(avg_daily_demand * 1.3))
                 ))
 
             return ForecastResponse(
@@ -309,7 +321,7 @@ async def get_procurement_forecast(payload: ProcurementRequest):
                 X = daily[['day_of_week', 'day_of_month', 't']]
                 y = daily['qty']
 
-                rf = RandomForestRegressor(n_estimators=50, random_state=42)
+                rf = RandomForestRegressor(n_estimators=100, random_state=42)
                 rf.fit(X, y)
 
                 # Predict next 14 days
@@ -353,3 +365,10 @@ async def get_procurement_forecast(payload: ProcurementRequest):
 
 def math_round(val: float) -> int:
     return int(val + 0.5)
+
+if __name__ == "__main__":
+    import uvicorn
+    port = int(os.getenv("PORT", 8000))
+    logger.info(f"Starting FastAPI ML Server on port {port}...")
+    uvicorn.run("main:app", host="0.0.0.0", port=port, reload=True)
+
